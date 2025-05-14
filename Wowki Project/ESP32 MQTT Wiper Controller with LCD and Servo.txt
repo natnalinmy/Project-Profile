@@ -1,0 +1,44 @@
+ESP32 MQTT Wiper Controller with LCD and Servo
+
+Features:
+- Wi-Fi connectivity (Wokwi-GUEST)
+- MQTT communication (HiveMQ broker)
+- Servo motor as wiper simulation
+- Button control for OFF / LOW / HIGH speed
+- LCD1602 I2C display for status updates
+
+WiFi Settings:
+- SSID: Wokwi-GUEST
+- Password: (empty)
+
+MQTT Settings:
+- Broker: broker.hivemq.com
+- Port: 1883
+- Client ID: mywiper123
+- User: IoTRainWiper
+- Password: 111My222
+- Subscribe Topic: mywiper/control
+- Publish Topic: mywiper/status
+
+Components:
+- Servo (Pin 15)
+- Button (Pin 4)
+- LCD1602 I2C (SDA Pin 21, SCL Pin 22)
+- MQTT Client using umqtt.simple
+
+Functionalities:
+1. Connects to Wi-Fi
+2. Subscribes to MQTT topic for remote control
+3. Publishes status back to MQTT
+4. Controls servo motor for wiper movement
+5. Three modes: OFF / LOW / HIGH speed
+6. Button toggles between modes
+7. LCD displays current wiper status
+8. Debouncing logic for button press
+9. Live-speed servo movement
+10. Returns to parked position when OFF
+
+
+## 🔗 Live Simulation
+
+Run it in the browser: [Wokwi Project](https://wokwi.com/projects/430915169743824897)

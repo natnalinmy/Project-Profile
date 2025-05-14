@@ -1,0 +1,30 @@
+# ESP32 IoT MQTT Controller
+
+This project demonstrates an ESP32-based IoT controller using Wi-Fi and MQTT. It includes:
+
+- DHT22 sensor for temperature and humidity
+- LED control via MQTT
+- Servo motor control via MQTT
+- NeoPixel RGB LED strip control
+- MQTT publishing and subscribing via HiveMQ broker
+
+## 💡 Features
+
+- Wi-Fi connectivity
+- MQTT publish/subscribe
+- Realtime sensor data reporting
+- Remote control for LED, servo, and Neopixels
+- Works with HiveMQ or other public brokers
+
+## 🔗 Live Simulation
+
+Run it in the browser: [Wokwi Project](https://wokwi.com/projects/401504266395319297)
+
+## 📦 MQTT Topics
+
+| Topic               | Function                     |
+|---------------------|------------------------------|
+| `Tempdata`          | Publishes temperature/humidity |
+| `lights`            | Turns standard LED on/off    |
+| `servo`             | Rotates servo to given angle |
+| `lights/neopixel`   | Sets NeoPixel color (R,G,B)  |

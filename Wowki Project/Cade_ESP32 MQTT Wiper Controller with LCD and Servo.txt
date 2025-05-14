@@ -1,0 +1,346 @@
+# Libraries
+from machine import Pin, PWM, I2C, Timer
+from time import sleep, ticks_ms, ticks_diff
+import network
+import time
+from umqtt.simple import MQTTClient
+
+# WiFi credentials
+SSID = Wokwi-GUEST
+PASSWORD = 
+
+# MQTT credentials and setup
+MQTT_BROKER = broker.hivemq.com
+MQTT_PORT = 1883
+MQTT_CLIENT_ID = mywiper123
+MQTT_USER = IoTRainWiper
+MQTT_PASSWORD = 111My222
+TOPIC_SUB = bmywipercontrol
+TOPIC_PUB = bmywiperstatus
+
+# Connect to WiFi
+def connect_wifi()
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    wlan.connect(SSID, PASSWORD)
+    print(Connecting to WiFi..., end=)
+    while not wlan.isconnected()
+        print(., end=)
+        time.sleep(0.5)
+    print(nConnected! IP, wlan.ifconfig()[0])
+
+# Callback for incoming MQTT messages
+def on_message(topic, msg)
+    print(fReceived {topic.decode()} - {msg.decode()})
+    # Simulate wiper state update (just echoing back for now)
+    client.publish(TOPIC_PUB, msg)
+    
+# Main program
+connect_wifi()
+
+client = MQTTClient(client_id=MQTT_CLIENT_ID,
+                    server=MQTT_BROKER,
+                    port=MQTT_PORT,
+                    user=MQTT_USER,
+                    password=MQTT_PASSWORD)
+
+client.set_callback(on_message)
+client.connect()
+client.subscribe(TOPIC_SUB)
+print(fConnected to MQTT broker and subscribed to {TOPIC_SUB.decode()})
+
+# Main loop
+try
+    while True
+        client.check_msg()  # check for new messages
+        time.sleep(0.1)
+except KeyboardInterrupt
+    client.disconnect()
+    print(Disconnected)
+
+
+# Setup Components
+servo = PWM(Pin(15), freq=50)
+button = Pin(4, Pin.IN, Pin.PULL_DOWN)
+
+# Setup LCD1602 with I2C
+i2c = I2C(1, sda=Pin(21), scl=Pin(22), freq=100000)  # Using I2C(1) instead of I2C(0)
+print(Scanning I2C bus...)
+devices = i2c.scan()
+if devices
+    print(I2C devices found, [hex(d) for d in devices])
+    LCD_ADDR = devices[0]  # Use the first found device
+    print(fUsing LCD address {hex(LCD_ADDR)})
+else
+    print(No I2C devices found! Check your connections.)
+    LCD_ADDR = 0x27  # Default address, might not work
+
+# LCD1602 commands
+LCD_CLEARDISPLAY = 0x01
+LCD_RETURNHOME = 0x02
+LCD_ENTRYMODESET = 0x04
+LCD_DISPLAYCONTROL = 0x08
+LCD_CURSORSHIFT = 0x10
+LCD_FUNCTIONSET = 0x20
+LCD_SETCGRAMADDR = 0x40
+LCD_SETDDRAMADDR = 0x80
+
+# LCD1602 flags for display entry mode
+LCD_ENTRYRIGHT = 0x00
+LCD_ENTRYLEFT = 0x02
+LCD_ENTRYSHIFTINCREMENT = 0x01
+LCD_ENTRYSHIFTDECREMENT = 0x00
+
+# LCD1602 flags for display onoff control
+LCD_DISPLAYON = 0x04
+LCD_DISPLAYOFF = 0x00
+LCD_CURSORON = 0x02
+LCD_CURSOROFF = 0x00
+LCD_BLINKON = 0x01
+LCD_BLINKOFF = 0x00
+
+# LCD1602 flags for function set
+LCD_8BITMODE = 0x10
+LCD_4BITMODE = 0x00
+LCD_2LINE = 0x08
+LCD_1LINE = 0x00
+LCD_5x10DOTS = 0x04
+LCD_5x8DOTS = 0x00
+
+# LCD1602 line addresses
+LCD_LINE1 = 0x80  # LCD RAM address for the 1st line
+LCD_LINE2 = 0xC0  # LCD RAM address for the 2nd line
+
+# Simplified LCD class for PCF8574 I2C LCD controller
+class LCD1602
+    def __init__(self, i2c, addr)
+        self.i2c = i2c
+        self.addr = addr
+        self.backlight = True
+        
+        # Initialize display
+        sleep(0.05)  # Wait for power-up
+        
+        # 4-bit mode initialization
+        self._write_cmd_4bit(0x30)  # Wake up #1
+        sleep(0.005)
+        self._write_cmd_4bit(0x30)  # Wake up #2
+        sleep(0.005)
+        self._write_cmd_4bit(0x30)  # Wake up #3
+        sleep(0.005)
+        self._write_cmd_4bit(0x20)  # 4-bit mode
+        sleep(0.005)
+        
+        # Set function
+        self.write_cmd(LCD_FUNCTIONSET  LCD_2LINE  LCD_5x8DOTS  LCD_4BITMODE)
+        self.write_cmd(LCD_DISPLAYCONTROL  LCD_DISPLAYON)
+        self.write_cmd(LCD_CLEARDISPLAY)
+        sleep(0.005)
+        self.write_cmd(LCD_ENTRYMODESET  LCD_ENTRYLEFT)
+        sleep(0.005)
+    
+    def _write_cmd_4bit(self, cmd)
+        # Send command via 4-bit mode
+        try
+            data = (cmd & 0xF0)  0x08 if self.backlight else (cmd & 0xF0)
+            self.i2c.writeto(self.addr, bytes([data]))
+            sleep(0.002)  # Wait for processing
+            self.i2c.writeto(self.addr, bytes([data  0x04]))  # Enable pulse
+            sleep(0.002)
+            self.i2c.writeto(self.addr, bytes([data]))
+            sleep(0.002)
+        except Exception as e
+            print(fLCD error {e})
+    
+    def write_cmd(self, cmd)
+        # Send high 4 bits
+        self._write_cmd_4bit(cmd)
+        # Send low 4 bits
+        self._write_cmd_4bit((cmd  4) & 0xF0)
+    
+    def write_data(self, data)
+        # Send data via 4-bit mode with RS=1
+        try
+            high_bits = (data & 0xF0)  0x09 if self.backlight else (data & 0xF0)  0x01
+            low_bits = ((data  4) & 0xF0)  0x09 if self.backlight else ((data  4) & 0xF0)  0x01
+            
+            self.i2c.writeto(self.addr, bytes([high_bits]))
+            self.i2c.writeto(self.addr, bytes([high_bits  0x04]))  # Enable pulse
+            self.i2c.writeto(self.addr, bytes([high_bits]))
+            
+            self.i2c.writeto(self.addr, bytes([low_bits]))
+            self.i2c.writeto(self.addr, bytes([low_bits  0x04]))  # Enable pulse
+            self.i2c.writeto(self.addr, bytes([low_bits]))
+        except Exception as e
+            print(fLCD error {e})
+    
+    def clear(self)
+        self.write_cmd(LCD_CLEARDISPLAY)
+        sleep(0.005)  # Wait for clear
+    
+    def home(self)
+        self.write_cmd(LCD_RETURNHOME)
+        sleep(0.005)  # Wait for home
+    
+    def set_cursor(self, col, row)
+        row_offsets = [0x00, 0x40, 0x14, 0x54]
+        if row  1
+            row = 1
+        self.write_cmd(LCD_SETDDRAMADDR  (col + row_offsets[row]))
+    
+    def putstr(self, string)
+        for char in string
+            self.write_data(ord(char))
+    
+    def display_off(self)
+        self.write_cmd(LCD_DISPLAYCONTROL  LCD_DISPLAYOFF)
+    
+    def display_on(self)
+        self.write_cmd(LCD_DISPLAYCONTROL  LCD_DISPLAYON)
+    
+    def backlight_off(self)
+        self.backlight = False
+        self.i2c.writeto(self.addr, bytes([0]))
+    
+    def backlight_on(self)
+        self.backlight = True
+        self.i2c.writeto(self.addr, bytes([0x08]))
+
+# Initialize LCD if I2C device found
+lcd = None
+if devices
+    try
+        lcd = LCD1602(i2c, LCD_ADDR)
+        lcd.clear()
+        lcd.putstr(Wiper System)
+        lcd.set_cursor(0, 1)
+        lcd.putstr(Initializing...)
+        print(LCD initialized)
+    except Exception as e
+        print(fLCD init error {e})
+else
+    print(LCD not found!)
+
+# Set servo angle
+def set_angle(angle)
+    min_us = 1000
+    max_us = 2000
+    us = min_us + (angle  180)  (max_us - min_us)
+    duty_u16 = int(us  20000  65535)
+    servo.duty_u16(duty_u16)
+
+# Wiper states and constants
+WIPER_OFF = 0
+WIPER_LOW = 1
+WIPER_HIGH = 2
+wiper_state = WIPER_OFF
+
+POSITION_PARKED = 90
+MIN_ANGLE = 0
+MAX_ANGLE = 180
+current_angle = POSITION_PARKED
+
+last_button_state = 0
+last_press_time = ticks_ms()
+
+def get_current_delay()
+    return 0.1 if wiper_state == WIPER_LOW else 0.01
+
+# Function to update LCD display
+def update_lcd()
+    if lcd
+        try
+            lcd.clear()
+            lcd.set_cursor(0, 0)
+            lcd.putstr(Wiper System)
+            lcd.set_cursor(0, 1)
+            
+            if wiper_state == WIPER_OFF
+                lcd.putstr(Status OFF)
+            elif wiper_state == WIPER_LOW
+                lcd.putstr(Status LOW)
+            else
+                lcd.putstr(Status HIGH)
+        except Exception as e
+            print(fLCD update error {e})
+
+# Check button with debounce
+def check_button()
+    global last_button_state, wiper_state, last_press_time
+    
+    button_state = button.value()
+    current_time = ticks_ms()
+    
+    if button_state == 1 and last_button_state == 0
+        if ticks_diff(current_time, last_press_time)  200
+            wiper_state = (wiper_state + 1) % 3
+            
+            if wiper_state == WIPER_OFF
+                print(Wiper mode OFF)
+            elif wiper_state == WIPER_LOW
+                print(Wiper mode LOW speed)
+            else
+                print(Wiper mode HIGH speed)
+            
+            # Update LCD when mode changes
+            update_lcd()
+            
+            last_press_time = current_time
+    
+    last_button_state = button_state
+
+# Move servo with live speed and stop-then-park behavior
+def move_servo_with_live_speed(start_angle, end_angle, step_size)
+    global current_angle
+    
+    step = step_size if end_angle  start_angle else -step_size
+    for angle in range(start_angle, end_angle + step, step)
+        set_angle(angle)
+        current_angle = angle
+        
+        for _ in range(5)
+            check_button()
+            sleep(get_current_delay()  5)
+
+# Initialize servo position
+set_angle(POSITION_PARKED)
+current_angle = POSITION_PARKED
+
+# Show initial state on LCD
+update_lcd()
+
+# Main loop
+try
+    while True
+        check_button()
+        
+        if wiper_state == WIPER_OFF
+            if current_angle != POSITION_PARKED
+                if current_angle  MIN_ANGLE
+                    move_servo_with_live_speed(current_angle, MIN_ANGLE, 5)
+                move_servo_with_live_speed(current_angle, POSITION_PARKED, 5)
+            else
+                sleep(0.01)
+        
+        else
+            if current_angle == POSITION_PARKED
+                move_servo_with_live_speed(POSITION_PARKED, MIN_ANGLE, 5)
+            
+            move_servo_with_live_speed(MIN_ANGLE, MAX_ANGLE, 5)
+            
+            for _ in range(5)
+                check_button()
+                if wiper_state == WIPER_OFF
+                    break
+                sleep(get_current_delay()  5)
+            
+            move_servo_with_live_speed(MAX_ANGLE, MIN_ANGLE, 5)
+            
+            for _ in range(3)
+                check_button()
+                if wiper_state == WIPER_OFF
+                    break
+                sleep(get_current_delay()  3)
+
+except Exception as e
+    print(fMain loop error {e})
